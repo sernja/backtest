@@ -1,6 +1,7 @@
 import matplotlib.pyplot as plt 
 import numpy as np 
-from multiprocessing import Pool
+from multiprocessing import Manager, Pool
+from multiprocessing as mp
 from timeit import default_timer as timer
 
 from functools import partial
@@ -13,9 +14,9 @@ def find_x(entry_price, exit_price, short_long):
     else :
         return np.arange(entry_price, exit_price+(0.1*short_long), 0.1)
 
-def inverse_calculate(x, quantity, entry_price, short_long, leverage, entry_value):
+def inverse_calculate(x, q, quantity, entry_price, short_long, leverage, entry_value):
     # print(quantity, entry_price, short_long, leverage, entry_value)
-    return short_long*leverage*(quantity/entry_price - quantity/x)/entry_value*100
+    q.put(short_long*leverage*(quantity/entry_price - quantity/x)/entry_value*100)
 
 def normal_calculate(x):
     return short_long*leverage*(x-entry_price)/entry_price*100
@@ -43,7 +44,7 @@ def display(chart_, x, y_normal, y_roe_inverse, roe, roe_linear):
 if(__name__=='__main__'):
     quantity = 1
     entry_price = 1
-    exit_price = 100
+    exit_price = 5
     exit_price_c = exit_price-1
     leverage = 1
     short_long = int(input('long(1) or short(-1) : '))
@@ -76,25 +77,30 @@ if(__name__=='__main__'):
     # print(type(x))
 
     #graph calculate parallel
+    m = Manager()
+    q = m.Queue()
     pool = Pool(processes = 4)
-    xList = x.tolist()
-    tupleX = list(zip(xList))
+    # xList = x.tolist()
+    # tupleX = list(zip(xList))
+    pool_tupleX = [(i, q) for i in x]
+    # print(pool_tupleX)
     #time
     start = timer()
-    result_list_roeInverse = pool.starmap(
-                                partial(
-                                    inverse_calculate, 
-                                    quantity = quantity, 
-                                    entry_price = entry_price, 
-                                    short_long = short_long, 
-                                    leverage = leverage, 
-                                    entry_value = entry_value
-                                    ), 
-                                tupleX
-                            )
+    with Pool(processes=4) as pool:
+        pool.starmap(
+                                    partial(
+                                        inverse_calculate, 
+                                        quantity = quantity, 
+                                        entry_price = entry_price, 
+                                        short_long = short_long, 
+                                        leverage = leverage, 
+                                        entry_value = entry_value
+                                        ), 
+                                    pool_tupleX
+                                )
     end = timer()
-    pool.close()
-    pool.join()
+    # for i in x:
+    #     print(q.get())
     
     print('parallel: ', (end-start)*10000)
 
